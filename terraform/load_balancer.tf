@@ -13,10 +13,16 @@ resource "aws_lb" "certia_alb" {
 }
 
 resource "aws_lb_target_group" "certia_tg" {
-  name     = "certia-evidencia-tg"
+  name     = "certia-frontend-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.default.id
+
+  tags = {
+    Name       = "Certia-Frontend-TG"
+    Project    = "Route53vsAWSGlobalAccelerator"
+    Gestionado = "Terraform"
+  }
 }
 
 resource "aws_lb_target_group_attachment" "web_attach" {

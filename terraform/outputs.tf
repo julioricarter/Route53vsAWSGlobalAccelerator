@@ -5,7 +5,7 @@ output "route53_domain" {
 
 output "global_accelerator_ip_1" {
   description = "Primera IP estática Anycast"
-  value       = aws_route53_record.frontend.name
+  value       = aws_globalaccelerator_accelerator.frontend_ga.ip_sets[0].ip_addresses[0]
 }
 
 output "global_accelerator_ip_2" {
