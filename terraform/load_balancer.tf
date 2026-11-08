@@ -6,9 +6,9 @@ resource "aws_lb" "certia_alb" {
   subnets            = data.aws_subnets.default.ids
 
   tags = {
-    Name      = "Certia-Frontend-ALB"
-    Project   = "Route53vsAWSGlobalAccelerator"
-    Gestonado = "Terraform"
+    Name       = "Certia-Frontend-ALB"
+    Project    = "Route53vsAWSGlobalAccelerator"
+    Gestionado = "Terraform"
   }
 }
 

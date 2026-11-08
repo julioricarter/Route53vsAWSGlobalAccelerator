@@ -1,4 +1,4 @@
-resource "aws_globalaccelerator_accelerator" "certia_ga" {
+resource "aws_globalaccelerator_accelerator" "frontend_ga" {
   name            = "certia-frontend-ga"
   ip_address_type = "IPV4"
   enabled         = true
@@ -10,7 +10,7 @@ resource "aws_globalaccelerator_accelerator" "certia_ga" {
   }
 }
 
-resource "aws_globalaccelerator_listener" "certia_ga_listener" {
+resource "aws_globalaccelerator_listener" "frontend_ga_listener" {
   accelerator_arn = aws_globalaccelerator_accelerator.frontend_ga.id
   client_affinity = "NONE"
   protocol        = "TCP"
@@ -21,7 +21,7 @@ resource "aws_globalaccelerator_listener" "certia_ga_listener" {
   }
 }
 
-resource "aws_globalaccelerator_endpoint_group" "certia_ga_eg" {
+resource "aws_globalaccelerator_endpoint_group" "frontend_ga_eg" {
   listener_arn          = aws_globalaccelerator_listener.frontend_ga_listener.id
   endpoint_group_region = var.aws_region
 
