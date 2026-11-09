@@ -6,7 +6,7 @@ terraform {
     }
   }
   backend "s3" {
-    bucket = "tu-bucket-terraform-state-certia"
+    bucket = "certia-tfstate-298123941345"
     key    = "Route53vsAWSGlobalAccelerator/terraform.tfstate"
     region = "us-east-1"
   }
