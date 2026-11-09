@@ -14,10 +14,10 @@ jobs:
       - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: Configurar credenciales de AWS
+      - name: Configurar credenciales de AWS vía OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::298123941345:role/Rol-OIDC-Certia-GitHub
+          role-to-assume: arn:aws:iam::298123941345:role/Rol-OIDC-Certia
           aws-region: us-east-1
 
       - name: Configurar Terraform
