@@ -1,6 +1,6 @@
 output "route53_domain" {
   description = "El dominio configurado en Route 53"
-  value       = aws_route53_record.frontend.name
+  value       = aws_lb.certia_alb.dns_name
 }
 
 output "global_accelerator_ip_1" {
