@@ -1,7 +1,7 @@
 name: Destruir Evidencia (Evitar Costos)
 
 on:
-  workflow_dispatch: # Se ejecuta manualmente tras tomar las capturas
+  workflow_dispatch: # Se ejecuta manualmente
 
 permissions:
   id-token: write
@@ -17,7 +17,7 @@ jobs:
       - name: Configurar credenciales de AWS vía OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::298123941345:role/Rol-OIDC
+          role-to-assume: arn:aws:iam::298123941345:role/Rol-OIDC-Certia
           aws-region: us-east-1
 
       - name: Configurar Terraform
