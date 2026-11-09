@@ -1,0 +1,56 @@
+name: Desplegar Evidencia (Route 53 vs Global Accelerator)
+
+on:
+  workflow_dispatch: # Ejecución manual para tener control de cuándo hacer la prueba
+
+permissions:
+  id-token: write # Requerido para autenticación OIDC con AWS
+  contents: read
+
+jobs:
+  deploy_and_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar credenciales de AWS vía OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::TU_CUENTA_AWS:role/Rol-OIDC-Certia-GitHub
+          aws-region: us-east-1
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./terraform
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: ./terraform
+
+      - name: Extraer Outputs de Terraform
+        id: tf_outputs
+        working-directory: ./terraform
+        run: |
+          # Extraemos las variables definidas en outputs.tf
+          echo "R53_DOMAIN=$(terraform output -raw route53_domain)" >> $GITHUB_ENV
+          echo "GA_IP=$(terraform output -raw global_accelerator_ip_1)" >> $GITHUB_ENV
+
+      - name: Recolectar Evidencia de Resolución (DNS vs IP Fija)
+        run: |
+          echo "--- Evidencia 1: Resolución Route 53 (Muestra IPs dinámicas del ALB) ---"
+          dig +short $R53_DOMAIN
+          echo "--- Evidencia 2: Global Accelerator (IP Fija Anycast) ---"
+          echo $GA_IP
+
+      - name: Simulación de Peticiones (Prueba de balanceo)
+        run: |
+          # Buscamos el texto exacto configurado en las instancias EC2
+          echo "Realizando 5 peticiones a Route 53..."
+          for i in {1..5}; do curl -s http://$R53_DOMAIN | grep "Hola, aqui probando desde Certia"; sleep 1; done
+
+          echo "Realizando 5 peticiones a Global Accelerator..."
+          for i in {1..5}; do curl -s http://$GA_IP | grep "Hola, aqui probando desde Certia"; sleep 1; done
