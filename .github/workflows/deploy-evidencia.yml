@@ -1,11 +1,14 @@
 name: Desplegar Evidencia (Route 53 vs Global Accelerator)
 
 on:
-  workflow_dispatch: # Ejecución manual para tener control de cuándo hacer la prueba
+  workflow_dispatch:
 
 permissions:
-  id-token: write # Requerido para autenticación OIDC con AWS
+  id-token: write
   contents: read
+
+concurrency:
+  group: terraform-evidencia
 
 jobs:
   deploy_and_test:
@@ -13,11 +16,6 @@ jobs:
     steps:
       - name: Checkout del código
         uses: actions/checkout@v4
-        
-      - name: Debug token OIDC
-        run: |
-          TOKEN=$(curl -s -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
-          echo "$TOKEN" | cut -d. -f2 | tr '_-' '/+' | awk '{ while (length($0)%4) $0=$0"="; print }' | base64 -d | jq -r '.sub, .aud, .iss'
 
       - name: Configurar credenciales de AWS vía OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -27,6 +25,8 @@ jobs:
 
       - name: Configurar Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
 
       - name: Terraform Init
         run: terraform init
@@ -37,25 +37,57 @@ jobs:
         working-directory: ./terraform
 
       - name: Extraer Outputs de Terraform
-        id: tf_outputs
         working-directory: ./terraform
         run: |
-          # Extraemos las variables definidas en outputs.tf
           echo "R53_DOMAIN=$(terraform output -raw route53_domain)" >> $GITHUB_ENV
+          echo "R53_NS=$(terraform output -raw route53_nameserver)" >> $GITHUB_ENV
           echo "GA_IP=$(terraform output -raw global_accelerator_ip_1)" >> $GITHUB_ENV
 
-      - name: Recolectar Evidencia de Resolución (DNS vs IP Fija)
-        run: |
-          echo "--- Evidencia 1: Resolución Route 53 (Muestra IPs dinámicas del ALB) ---"
-          dig +short $R53_DOMAIN
-          echo "--- Evidencia 2: Global Accelerator (IP Fija Anycast) ---"
-          echo $GA_IP
+      - name: Instalar dig si falta
+        run: command -v dig || sudo apt-get install -y dnsutils
 
-      - name: Simulación de Peticiones (Prueba de balanceo)
+      - name: Esperar a que los endpoints respondan
         run: |
-          # Buscamos el texto exacto configurado en las instancias EC2
-          echo "Realizando 5 peticiones a Route 53..."
-          for i in {1..5}; do curl -s http://$R53_DOMAIN | grep "Hola, aqui probando desde Certia"; sleep 1; done
+          for i in {1..40}; do
+            IP=$(dig +short $R53_DOMAIN @$R53_NS | head -1)
+            if [ -n "$IP" ] && curl -s -m 5 --resolve $R53_DOMAIN:80:$IP http://$R53_DOMAIN | grep -q "Hola, aqui probando desde Certia"; then
+              echo "OK Route 53 ($IP)"; break
+            fi
+            echo "Esperando Route 53 ($i/40)..."; sleep 10
+          done
+          for i in {1..40}; do
+            if curl -s -m 5 http://$GA_IP | grep -q "Hola, aqui probando desde Certia"; then
+              echo "OK Global Accelerator ($GA_IP)"; break
+            fi
+            echo "Esperando Global Accelerator ($i/40)..."; sleep 10
+          done
 
-          echo "Realizando 5 peticiones a Global Accelerator..."
-          for i in {1..5}; do curl -s http://$GA_IP | grep "Hola, aqui probando desde Certia"; sleep 1; done
+      - name: Recolectar evidencia y probar balanceo
+        run: |
+          {
+            echo "## Evidencia 1: Route 53 (respuesta DNS del servidor autoritativo)"
+            for i in 1 2 3; do dig +noall +answer $R53_DOMAIN @$R53_NS; echo; sleep 2; done
+            echo "## Evidencia 2: Global Accelerator (IP fija Anycast)"
+            echo "IP estatica: $GA_IP"
+            echo
+            echo "## Peticiones a Route 53 (IP resuelta por DNS en cada peticion)"
+            for i in {1..5}; do
+              IP=$(dig +short $R53_DOMAIN @$R53_NS | head -1)
+              echo -n "[$IP] "
+              curl -s -m 5 --resolve $R53_DOMAIN:80:$IP http://$R53_DOMAIN | grep "Hola, aqui probando desde Certia"
+              sleep 1
+            done
+            echo
+            echo "## Peticiones a Global Accelerator (siempre la misma IP)"
+            for i in {1..5}; do
+              echo -n "[$GA_IP] "
+              curl -s -m 5 http://$GA_IP | grep "Hola, aqui probando desde Certia"
+              sleep 1
+            done
+          } | tee evidencia.txt >> $GITHUB_STEP_SUMMARY
+
+      - name: Subir evidencia
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidencia-r53-vs-ga
+          path: evidencia.txt
